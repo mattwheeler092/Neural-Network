@@ -2,8 +2,7 @@ import numpy as np
 
 np.random.seed(12345)
 
-
-  
+#======================================================================================================================================# 
         
 def sigmoid(x, differential = False):
     if differential:
@@ -11,12 +10,22 @@ def sigmoid(x, differential = False):
     else:
         return 1 / (1 + np.exp(-x))
     
+
+def relu(x, differential = False):
+    if differential:
+        return np.maximum(0, x) / x
+    else:
+        return np.maximum(0, x)
+
+
+    
 def mean_squared_error(prediction, actual, differential = False):
     if differential:
         return prediction - actual
     else:
         return np.sum(0.5 * np.power(prediction - actual, 2))
 
+#======================================================================================================================================# 
 
 class Layer:
     
@@ -24,6 +33,7 @@ class Layer:
         self.num_nodes = num_nodes
         self.activation = activation
         
+#======================================================================================================================================# 
         
 class Network:
     
@@ -39,56 +49,95 @@ class Network:
             else:
                 self.network_parameters.append([2 * np.random.rand(layer.num_nodes, network_layers[index - 1].num_nodes) - 1,
                                                 2 * np.random.rand(layer.num_nodes) - 1])
+                
+    #----------------------------------------------------------------------------------------------------------------------------------#
     
     def feed_forward(self, network_input):
         self.network_state[0] = network_input
         for index, (weights, bias) in enumerate(self.network_parameters):
             activation_function = self.network_layers[index].activation
             self.network_state[index + 1] = activation_function(np.dot(weights, self.network_state[index]) + bias)
+            
+    #----------------------------------------------------------------------------------------------------------------------------------#
+
+    def compute_cost(self, batch_input, batch_output, cost_function):
+        total_cost = 0
+        for index, input in enumerate(batch_input):
+            self.feed_forward(input)
+            total_cost += cost_function(self.network_state[-1], batch_output[index])
+        return total_cost / batch_input.shape[0]
+            
+    #----------------------------------------------------------------------------------------------------------------------------------#
         
     def compute_gradient(self, batch_input, batch_output, cost_function):
-        
         network_gradients = []
-        
-        #for batch_index, output in enumerate(batch_output):
-            
-        self.feed_forward(batch_input)
+        for batch_index, output in enumerate(batch_output):
+            self.feed_forward(batch_input[batch_index])
+            for index, (weights, bias) in reversed(list(enumerate(self.network_parameters))):          
+                activation_func = self.network_layers[index].activation
+                if batch_index == 0:
+                    if index == len(self.network_parameters) - 1:
+                        sigma = np.multiply(cost_function(self.network_state[index + 1], output, True),
+                                            activation_func(np.dot(weights, self.network_state[index]) + bias, True))
+                        network_gradients.append([np.dot(np.transpose([sigma]), [self.network_state[index]]), sigma])
+                    else:   
+                        sigma = np.multiply(np.dot(np.transpose(self.network_parameters[index + 1][0]), network_gradients[0][1]),
+                                            self.network_layers[index].activation(np.dot(weights, self.network_state[index]) + bias, True))
+                        network_gradients.insert(0, [np.dot(np.transpose([sigma]), [self.network_state[index]]), sigma])
+                else:
+                    if index == len(self.network_parameters) - 1:
+                        sigma = np.multiply(cost_function(self.network_state[index + 1], output, True), 
+                                            self.network_layers[index].activation(np.dot(weights, self.network_state[index]) + bias, True))
+                    else:
+                        sigma = np.multiply(np.dot(np.transpose(self.network_parameters[index + 1][0]), network_gradients[index + 1][1]), 
+                                            activation_func(np.dot(weights, self.network_state[index]) + bias, True))   
+                    network_gradients[index][0] = network_gradients[index][0] + np.dot(np.transpose([sigma]),[self.network_state[index]])
+                    network_gradients[index][1] = network_gradients[index][1] + sigma
+                    if batch_index == batch_input.shape[0] - 1:
+                        network_gradients[index][0] = network_gradients[index][0] / batch_input.shape[0]
+                        network_gradients[index][1] = network_gradients[index][1] / batch_input.shape[0]
+        return network_gradients
     
-        for index, (weights, bias) in reversed(list(enumerate(self.network_parameters))):
-            
-            #print(weights)
-            #print(bias)
-            
-            print()
-            #print(self.network_state)
-            print()
-            
-            
-            activation_func = self.network_layers[index].activation
-            
-            if index == len(self.network_parameters) - 1:
-                sigma = np.multiply(cost_function(self.network_state[index + 1], batch_output, True),
-                                    activation_func(np.dot(weights, self.network_state[index]) + bias, True))
-                network_gradients.append([np.dot(np.transpose([sigma]), [self.network_state[index]]), sigma])
-            
-            else:   
-                sigma = np.multiply(np.dot(np.transpose(self.network_parameters[index + 1][0]), network_gradients[0][1]),
-                                    self.network_layers[index].activation(np.dot(weights, self.network_state[index]) + bias, True))
-                network_gradients.insert(0, [np.dot(np.transpose([sigma]), [self.network_state[index]]), sigma])
-        
-        return 0
+    #----------------------------------------------------------------------------------------------------------------------------------#
 
+    def update_parameters(self, network_gradients, learning_rate):
+        for index, (grad_weights, grad_bias) in enumerate(network_gradients):
+            self.network_parameters[index][0] -= learning_rate * grad_weights
+            self.network_parameters[index][1] -= learning_rate * grad_bias
+            
+#======================================================================================================================================# 
 
-L1 = Layer(5, sigmoid)
+L1 = Layer(10, relu)
+
+L2 = Layer(10, relu)
 
 output = Layer(3, sigmoid)
 
-network = Network(3, [L1, output])
+network = Network(3, [L1, L2, output])
 
-input = np.array([1,2,3])
+input = np.array([[0,1,0],[1,0,0],[0,0,1],[0,1,0],[1,0,0],[0,0,1]])
 
-output = np.array([1,1,1])
+output = np.array([[0,1,0],[1,0,0],[0,0,1],[0,1,0],[1,0,0],[0,0,1]])
 
-network.compute_gradient(input, output, mean_squared_error)
+cost = []
+x_val = []
+
+for index in range(10000):
+
+    grad = network.compute_gradient(input, output, mean_squared_error)
+    network.update_parameters(grad, 0.01)
+    cost_val = network.compute_cost(input, output, mean_squared_error)
+    cost.append(cost_val)
+    x_val.append(index)
+
+import matplotlib.pyplot as plt 
+
+plt.plot(x_val, cost)
+plt.show()
+
+
+for x in input:
+    network.feed_forward(x)
+    print('\nInput = {}\nOutput = {}\n'.format(x, network.network_state[-1]))
 
 
