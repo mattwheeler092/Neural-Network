@@ -10,20 +10,29 @@ def sigmoid(x, differential = False):
     else:
         return 1 / (1 + np.exp(-x))
     
+#----------------------------------------------------------------------------------------------------------------------------------#
 
 def relu(x, differential = False):
     if differential:
-        return np.maximum(0, x) / x
+        def map_func(element):
+            if element > 0: return 1
+            else: return 0
+        return np.array(list(map(map_func, x)))
     else:
         return np.maximum(0, x)
 
-
+#----------------------------------------------------------------------------------------------------------------------------------#
     
 def mean_squared_error(prediction, actual, differential = False):
     if differential:
         return prediction - actual
     else:
         return np.sum(0.5 * np.power(prediction - actual, 2))
+    
+#----------------------------------------------------------------------------------------------------------------------------------#
+
+def step_decay(initial_rate, drop_frac, drop_epoch, epoch):
+    return initial_rate * np.power(drop_frac, np.floor(epoch / drop_epoch))
 
 #======================================================================================================================================# 
 
@@ -105,27 +114,38 @@ class Network:
             self.network_parameters[index][0] -= learning_rate * grad_weights
             self.network_parameters[index][1] -= learning_rate * grad_bias
             
+    #----------------------------------------------------------------------------------------------------------------------------------#
+
+    def predict(self, batch_input):
+        batch_output = np.zeros((batch_input.shape[0],1))
+        for index, input in enumerate(batch_input):
+            self.feed_forward(input)
+            batch_output[index] = self.network_state[-1]
+        return batch_output
+            
 #======================================================================================================================================# 
 
-L1 = Layer(10, relu)
+L1 = Layer(10, sigmoid)
 
-L2 = Layer(10, relu)
+L2 = Layer(10, sigmoid)
 
-output = Layer(3, sigmoid)
+output = Layer(1, sigmoid)
 
-network = Network(3, [L1, L2, output])
+network = Network(1, [output])
 
-input = np.array([[0,1,0],[1,0,0],[0,0,1],[0,1,0],[1,0,0],[0,0,1]])
+input = np.array([[0],[1],[0],[1],[0],[1],[0],[1]])
 
-output = np.array([[0,1,0],[1,0,0],[0,0,1],[0,1,0],[1,0,0],[0,0,1]])
+output = np.array([[0],[1],[0],[1],[0],[1],[0],[1]])
 
 cost = []
 x_val = []
 
-for index in range(10000):
+
+"""
+for index in range(40000):
 
     grad = network.compute_gradient(input, output, mean_squared_error)
-    network.update_parameters(grad, 0.01)
+    network.update_parameters(grad, 0.1)
     cost_val = network.compute_cost(input, output, mean_squared_error)
     cost.append(cost_val)
     x_val.append(index)
@@ -139,5 +159,23 @@ plt.show()
 for x in input:
     network.feed_forward(x)
     print('\nInput = {}\nOutput = {}\n'.format(x, network.network_state[-1]))
+
+"""
+
+initial = 0.1
+drop = 0.5
+drop_epoch = 100
+
+x = []
+y = []
+
+for epoch in range(1000):
+    x.append(epoch)
+    y.append(step_decay(initial, drop, drop_epoch, epoch))
+    
+import matplotlib.pyplot as plt 
+
+plt.plot(x,y)
+plt.show()
 
 
